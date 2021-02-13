@@ -1,8 +1,19 @@
 const rewire = require('rewire');
 const expect = require('chai').expect;
-const browserHandler = rewire('../../../lib/handlers/browserHandler');
 
 describe('browserHandler', () => {
+  let browserHandler;
+  before(() => {
+    browserHandler = rewire('../../../lib/handlers/browserHandler');
+  });
+
+  after(() => {
+    const createdSessionListener = browserHandler.__get__('createdSessionListener');
+    browserHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
+    browserHandler = rewire('../../../lib/handlers/browserHandler');
+    browserHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
+  });
+
   it('.clearPermissionOverrides should clear all overriden permissions', () => {
     let isCalled = false;
     let mockBrInstance = {
@@ -11,6 +22,11 @@ describe('browserHandler', () => {
       },
     };
     browserHandler.__set__('_browser', mockBrInstance);
+    browserHandler.__set__('_target', {
+      getTargets: () => {
+        return { targetInfos: [] };
+      },
+    });
     browserHandler.clearPermissionOverrides();
     expect(isCalled).to.be.true;
   });
@@ -19,12 +35,17 @@ describe('browserHandler', () => {
     let isCalled = false;
     let calledWith = {};
     let mockBrInstance = {
-      grantPermissions: async param => {
+      grantPermissions: async (param) => {
         isCalled = true;
         calledWith = param;
       },
     };
     browserHandler.__set__('_browser', mockBrInstance);
+    browserHandler.__set__('_target', {
+      getTargets: () => {
+        return { targetInfos: [] };
+      },
+    });
     browserHandler.overridePermissions('https://url.com', ['geolocation']);
     expect(isCalled).to.be.true;
     expect(calledWith).to.be.eql({
@@ -41,6 +62,11 @@ describe('browserHandler', () => {
       },
     };
     browserHandler.__set__('_browser', mockBrInstance);
+    browserHandler.__set__('_target', {
+      getTargets: () => {
+        return { targetInfos: [] };
+      },
+    });
     try {
       await browserHandler.overridePermissions('https://url.com', ['foo-bar']);
     } catch (error) {

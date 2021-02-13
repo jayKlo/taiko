@@ -62,7 +62,6 @@ docs/site
 docs/api.md
 docs/index.md
 docs/layout/partials/content.html
-docs/layout/assets/js/docSearch.js
 .idea/
 
 #local chromium
@@ -72,7 +71,25 @@ docs/layout/assets/js/docSearch.js
 test/functional-tests/reports/
 test/functional-tests/.gauge/
 test/functional-tests/package-lock.json
+test/unit-tests/data/*.html
 
 examples/package-lock.json
 lib/api.json
 *.swp
+tags
+_site
+apis.json
+
+#generated types testing
+types/taiko/test/generated
+
+# Ignore testscripts with this name in the root folder (created for debugging)
+test-script.js
+
+test/docs-tests/tmp/
+test/docs-tests/lib/
+test/docs-tests/gauge/.vscode
+test/docs-tests/gauge/package-lock.json
+test/docs-tests/gauge/reports/
+test/docs-tests/gauge/.gauge/
+test/package-lock.json

@@ -12,19 +12,28 @@ const processArgv = process.argv;
 let repl_mode = false;
 let taiko;
 function printVersion() {
-  const packageJson = require('../package.json');
-  let hash = 'RELEASE';
-  if (packageJson._resolved && packageJson._resolved.includes('#')) {
-    hash = packageJson._resolved.split('#')[1];
+  try {
+    const packageJson = require('../package.json');
+    let hash = 'RELEASE';
+    if (packageJson._resolved && packageJson._resolved.includes('#')) {
+      hash = packageJson._resolved.split('#')[1];
+    }
+    return `Version: ${packageJson.version} (Chromium: ${packageJson.taiko.chromium_version}) ${hash}`;
+  } catch (error) {
+    return 'Could not find the package.json file to read version information';
   }
-  return `Version: ${packageJson.version} (Chromium: ${packageJson.taiko.chromium_version}) ${hash}`;
 }
 
 async function exitOnUnhandledFailures(e) {
   if (!repl_mode) {
     console.error(e);
     if (taiko && (await taiko.client())) {
-      await taiko.closeBrowser();
+      try {
+        await taiko.closeBrowser();
+      } catch (error) {
+        console.error(error);
+        process.exit(1);
+      }
     }
     process.exit(1);
   }
@@ -73,11 +82,11 @@ function setDisableLogout() {
 }
 
 function seekingForHelp(args) {
-  return ['-h', '--help'].some(arg => args.includes(arg));
+  return ['-h', '--help'].some((arg) => args.includes(arg));
 }
 
 function registerSubcommandForPlugins(program, plugins) {
-  Object.keys(plugins).forEach(pluginName => {
+  Object.keys(plugins).forEach((pluginName) => {
     program
       .command(`${pluginName} [options...]`)
       .allowUnknownOption(true)
@@ -93,6 +102,7 @@ function isCLICommand() {
 }
 
 if (isTaikoRunner(processArgv[1])) {
+  process.env.TAIKO_ENABLE_ACTION_OUTPUT = process.env.TAIKO_ENABLE_ACTION_OUTPUT || true;
   let plugins = getExecutablePlugins();
   if (
     isCLICommand() &&
@@ -118,7 +128,7 @@ if (isTaikoRunner(processArgv[1])) {
     .option('-w, --wait-time <time in ms>', 'runs script with provided delay\n', parseInt)
     .option(
       '--emulate-device <device>',
-      'Allows to simulate device viewport. Visit https://github.com/getgauge/taiko/blob/master/lib/devices.js for all the available devices\n',
+      'Allows to simulate device viewport. Visit https://docs.taiko.dev/devices for all the available devices\n',
       setupEmulateDevice,
     )
     .option(
@@ -128,20 +138,20 @@ if (isTaikoRunner(processArgv[1])) {
     )
     .option('--plugin <plugin1,plugin2...>', 'Load the taiko plugin.', setPluginNameInEnv)
     .option('--no-log', 'Disable log output of taiko', setDisableLogout)
-    .action(function(_, fileName, cmd) {
+    .action(function (_, fileName, cmd) {
       taiko = require('../lib/taiko');
       if (fileName) {
         validate(fileName);
         const observe = Boolean(cmd.observe || cmd.slowMod);
         if (cmd.load) {
-          runFile(taiko, fileName, true, cmd.waitTime, fileName => {
-            return new Promise(resolve => {
+          runFile(taiko, fileName, true, cmd.waitTime, (fileName) => {
+            return new Promise((resolve) => {
               repl_mode = true;
-              repl.initialize(taiko, fileName, true).then(r => {
+              repl.initialize(taiko, fileName, true).then((r) => {
                 let listeners = r.listeners('exit');
                 r.removeAllListeners('exit');
                 r.on('exit', () => {
-                  listeners.forEach(l => r.addListener('exit', l));
+                  listeners.forEach((l) => r.addListener('exit', l));
                   resolve();
                 });
               });
@@ -156,7 +166,7 @@ if (isTaikoRunner(processArgv[1])) {
       }
     });
   registerSubcommandForPlugins(program, plugins);
-  program.unknownOption = option => {
+  program.unknownOption = (option) => {
     console.error('error: unknown option `%s', option);
     program.outputHelp();
     process.exit(1);

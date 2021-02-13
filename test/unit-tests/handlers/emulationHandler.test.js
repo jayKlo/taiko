@@ -1,26 +1,37 @@
 const rewire = require('rewire');
 const expect = require('chai').expect;
 const assert = require('chai').assert;
-const emulationHandler = rewire('../../../lib/handlers/emulationHandler');
 
 describe('emulationHandler', () => {
   let calledWith = {};
   let calledWithTouch = {};
+  let emulationHandler;
 
-  beforeEach(() => {
+  before(() => {
     calledWith = {};
-
+    emulationHandler = rewire('../../../lib/handlers/emulationHandler');
     emulationHandler.__set__('emulation', {
-      setGeolocationOverride: async param => {
+      setGeolocationOverride: async (param) => {
         calledWith = param;
       },
-      setDeviceMetricsOverride: async param => {
+      setDeviceMetricsOverride: async (param) => {
         calledWith = param;
       },
-      setTouchEmulationEnabled: async param => {
+      setTouchEmulationEnabled: async (param) => {
         calledWithTouch = param;
       },
     });
+  });
+
+  after(() => {
+    const createdSessionListener = emulationHandler.__get__('createdSessionListener');
+    emulationHandler
+      .__get__('eventHandler')
+      .removeListener('createdSession', createdSessionListener);
+    emulationHandler = rewire('../../../lib/handlers/emulationHandler');
+    emulationHandler
+      .__get__('eventHandler')
+      .removeListener('createdSession', createdSessionListener);
   });
 
   it('.setLocation should set the location', async () => {

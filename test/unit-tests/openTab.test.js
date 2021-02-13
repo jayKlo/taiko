@@ -1,29 +1,54 @@
 const expect = require('chai').expect;
 const { EventEmitter } = require('events');
 const rewire = require('rewire');
-const taiko = rewire('../../lib/taiko');
+const { fail } = require('assert');
 
 describe('openTab', () => {
-  let actualTarget, target, actualOptions, actualUrl;
+  let actualTarget, actualOptions, actualUrl, taiko;
+  let target = 'TARGET';
+
   before(async () => {
-    let mockCri = {
-      New: async function(options) {
-        actualUrl = options.url;
-        return target;
-      },
+    taiko = rewire('../../lib/taiko');
+
+    let mockConnectToCri = (tgt) => {
+      actualTarget = tgt;
     };
-    let mockConnectToCri = target => {
-      actualTarget = target;
-    };
+    let targetRegistry = new Map();
     const mockWrapper = async (options, cb) => {
       actualOptions = options;
       await cb();
     };
     taiko.__set__('validate', () => {});
+    taiko.__set__('targetHandler', {
+      createTarget: async function (url) {
+        actualUrl = url;
+        return target;
+      },
+      register: function (name, target) {
+        if (name && target) {
+          targetRegistry.set(name, target);
+        } else {
+          return targetRegistry.get(name);
+        }
+      },
+      unregister: function (name) {
+        targetRegistry.delete(name);
+      },
+      clearRegister: function () {
+        targetRegistry.clear();
+      },
+    });
     taiko.__set__('doActionAwaitingNavigation', mockWrapper);
-    taiko.__set__('cri', mockCri);
     taiko.__set__('connect_to_cri', mockConnectToCri);
-    taiko.__set__('_client', new EventEmitter());
+    taiko.__set__('cleanUpListenersOnClient', () => {});
+  });
+
+  after(() => {
+    taiko = rewire('../../lib/taiko');
+  });
+
+  afterEach(() => {
+    taiko.__get__('targetHandler').clearRegister();
   });
 
   it('Open tab without any url should call connectToCri', async () => {
@@ -52,7 +77,6 @@ describe('openTab', () => {
       navigationTimeout: 30000,
       waitForNavigation: true,
       waitForStart: 100,
-      isPageNavigationAction: true,
     };
     await taiko.openTab('example.com');
     expect(actualOptions).to.deep.equal(expectedOptions);
@@ -66,5 +90,33 @@ describe('openTab', () => {
     };
     await taiko.openTab('example.com', expectedOptions);
     expect(actualOptions).to.deep.equal(expectedOptions);
+  });
+
+  it('should throw error if tab is opened with same identifier more than once', async () => {
+    await taiko.openTab('example.com', { name: 'example' });
+    try {
+      await taiko.openTab('anotherexamplecom', { name: 'example' });
+      fail('Did not throw error on duplicate name registration');
+    } catch (err) {
+      expect(err.message).to.equal(
+        "There is a window or tab already registered with the name 'example' please use another name.",
+      );
+    }
+  });
+
+  it('should register with identifier if no url and an identifier is passed', async () => {
+    await taiko.openTab({ name: 'github' });
+    expect(actualOptions.name).to.equal('github');
+    expect(taiko.__get__('targetHandler').register('github')).to.equal(target);
+  });
+
+  it('should set about:blank as the url with identifier', async () => {
+    await taiko.openTab({ name: 'github' });
+    expect(actualUrl).to.equal('about:blank');
+  });
+
+  it('should set about:blank when no parameters are passed', async () => {
+    await taiko.openTab();
+    expect(actualUrl).to.equal('about:blank');
   });
 });

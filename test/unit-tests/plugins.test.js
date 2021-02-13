@@ -1,17 +1,23 @@
 const expect = require('chai').expect;
 const rewire = require('rewire');
-const PLUGINS = rewire('../../lib/plugins');
 const path = require('path');
 const os = require('os');
 
 describe('Plugins', () => {
+  let PLUGINS;
+  before(() => {
+    PLUGINS = rewire('../../lib/plugins');
+  });
+  after(() => {
+    PLUGINS = rewire('../../lib/plugins');
+  });
   describe('GetPlugins', () => {
     function mockReadFileSyncWith(content) {
       var fsMock = {
-        readFileSync: function() {
+        readFileSync: function () {
           return content;
         },
-        existsSync: function() {
+        existsSync: function () {
           return true;
         },
       };
@@ -39,7 +45,7 @@ describe('Plugins', () => {
     describe('Get plugins from package.json', () => {
       it('should give empty array if there is no package.json', () => {
         var fsMock = {
-          existsSync: function() {
+          existsSync: function () {
             return false;
           },
         };
@@ -96,6 +102,24 @@ describe('Plugins', () => {
     });
   });
 
+  describe('RegisterHooks', () => {
+    it('should define a const with available hooks', () => {
+      let expectedHooks = ['preConnectionHook'];
+      expect(expectedHooks).to.deep.equal(Object.keys(PLUGINS.pluginHooks));
+    });
+    it('should let plugins register to available hooks', () => {
+      const expectedResult = 'Value from hook';
+      PLUGINS.registerHooks({ preConnectionHook: () => expectedResult });
+      const actualResult = PLUGINS.pluginHooks['preConnectionHook']();
+      expect(actualResult).to.equal(expectedResult);
+    });
+    it('should throw error if plugins try to register unavailable hook', () => {
+      expect(() => {
+        PLUGINS.registerHooks({ nonAvailableHook: () => {} });
+      }).to.throw('Hook nonAvailableHook not available in taiko to register');
+    });
+  });
+
   describe('GetExecutablePlugin', () => {
     function createFakeFsDirentObj(isDir, isSymLink) {
       return {
@@ -109,10 +133,10 @@ describe('Plugins', () => {
       let globalPluginPath = path.join(tmpDir, 'global', 'taiko-plugin-path');
       let localPluginPath = path.join(tmpDir, 'local', 'taiko-plugin-path');
       var fsMock = {
-        existsSync: function() {
+        existsSync: function () {
           return true;
         },
-        readdirSync: function(path) {
+        readdirSync: function (path) {
           if (path === globalPluginPath) {
             return [
               'taiko-global-plugin1',
@@ -132,7 +156,7 @@ describe('Plugins', () => {
             'taiko-dup-plugin1',
           ];
         },
-        statSync: function(nodeModulePath) {
+        statSync: function (nodeModulePath) {
           let foo = {
             [path.join(globalPluginPath, 'taiko-global-plugin1')]: createFakeFsDirentObj(
               true,

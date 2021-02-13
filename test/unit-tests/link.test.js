@@ -2,7 +2,7 @@ const chai = require('chai');
 const expect = chai.expect;
 const chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
-let { openBrowser, closeBrowser, goto, link, toRightOf, setConfig } = require('../../lib/taiko');
+let { openBrowser, closeBrowser, goto, link, toRightOf, setConfig, $ } = require('../../lib/taiko');
 let { createHtml, removeFile, openBrowserArgs, resetConfig } = require('./test-util');
 const test_name = 'link';
 
@@ -26,7 +26,7 @@ describe(test_name, () => {
     await goto(filePath);
     setConfig({
       waitForNavigation: false,
-      retryTimeout: 100,
+      retryTimeout: 10,
       retryInterval: 10,
     });
   });
@@ -48,44 +48,30 @@ describe(test_name, () => {
       expect(await link(toRightOf('Click')).exists()).to.be.true;
     });
     it('should find the link for Hidden Elements with ID', async () => {
-      expect(await link({ id: 'hiddenLinkID' }, { selectHiddenElement: true }).exists()).to.be.true;
+      expect(await link({ id: 'hiddenLinkID' }).exists()).to.be.true;
     });
     it('should find the link for Hidden Elements with Text', async () => {
-      expect(
-        await link('HiddenLink', {
-          selectHiddenElement: true,
-        }).exists(),
-      ).to.be.true;
+      expect(await link('HiddenLink').exists()).to.be.true;
     });
 
     it('should return false when isVisible fn is observed on hidden element', async () => {
-      expect(
-        await link('HiddenLink', {
-          selectHiddenElement: true,
-        }).isVisible(),
-      ).to.be.false;
+      expect(await link('HiddenLink').isVisible()).to.be.false;
     });
 
     it('test isVisible() should throw err when element not found', async () => {
-      await expect(
-        link('foo', {
-          selectHiddenElement: true,
-        }).isVisible(),
-      ).to.be.rejected;
+      await expect(link('foo').isVisible()).to.be.rejected;
     });
   });
 
   describe('link description in page', () => {
     it('should find the link with text', async () => {
-      expect(link('here').description).to.be.eql('link with text here ');
+      expect(link('here').description).to.be.eql('Link with text here ');
     });
     it('should find the link with id', async () => {
-      expect(link({ id: 'redirect' }).description).to.be.eql(
-        'link[@id = concat(\'redirect\', "")]',
-      );
+      expect(link({ id: 'redirect' }).description).to.be.eql('Link[id="redirect"]');
     });
     it('should find the link with proximity selector', async () => {
-      expect(link(toRightOf('Click')).description).to.be.eql('link To right of Click');
+      expect(link(toRightOf('Click')).description).to.be.eql('Link to right of Click');
     });
     it('should return true when isVisible fn is observed on non hidden element', async () => {
       expect(await link('here').isVisible()).to.be.true;
@@ -105,7 +91,7 @@ describe(test_name, () => {
 
     it('test text should throw if the element is not found', async () => {
       await expect(link('.foo').text()).to.be.eventually.rejectedWith(
-        'link with text .foo  not found',
+        'Link with text .foo  not found',
       );
     });
   });
@@ -113,9 +99,7 @@ describe(test_name, () => {
   describe('test elementsList properties', () => {
     it('test get of elements', async () => {
       const elements = await link('similarLink').elements();
-      expect(elements[0].get())
-        .to.be.a('number')
-        .above(0);
+      expect(elements[0].get()).to.be.a('string');
     });
 
     it('test isVisible of elements', async () => {
@@ -125,7 +109,7 @@ describe(test_name, () => {
 
     it('test description of elements', async () => {
       let elements = await link('similarLink').elements();
-      expect(elements[0].description).to.be.eql('link with text similarLink ');
+      expect(elements[0].description).to.be.eql('Link with text similarLink ');
     });
 
     it('test text of elements', async () => {
@@ -133,6 +117,23 @@ describe(test_name, () => {
       expect(await elements[0].text()).to.be.eql('similarLink1');
       expect(await elements[1].text()).to.be.eql('similarLink2');
       expect(await elements[2].text()).to.be.eql('similarLink3');
+    });
+
+    it('test text of element with index', async () => {
+      let firstElement = await link('similarLink').element(0);
+      expect(await firstElement.text()).to.be.eql('similarLink1');
+      let secondElement = await link('similarLink').element(1);
+      expect(await secondElement.text()).to.be.eql('similarLink2');
+      let thirdElement = await link('similarLink').element(2);
+      expect(await thirdElement.text()).to.be.eql('similarLink3');
+    });
+  });
+
+  describe('Parameters validation', () => {
+    it('should throw a TypeError when an ElementWrapper is passed as argument', async () => {
+      expect(() => link($('p'))).to.throw(
+        'You are passing a `ElementWrapper` to a `link` selector. Refer https://docs.taiko.dev/api/link/ for the correct parameters',
+      );
     });
   });
 });

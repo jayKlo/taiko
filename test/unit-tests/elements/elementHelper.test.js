@@ -2,8 +2,6 @@ const expect = require('chai').expect;
 
 const rewire = require('rewire');
 const Element = require('../../../lib/elements/element');
-
-const elemHelper = rewire('../../../lib/elements/elementHelper');
 const { setConfig } = require('../../../lib/config');
 
 describe('elementHelper', () => {
@@ -12,6 +10,8 @@ describe('elementHelper', () => {
     hideHighlightCalled,
     warningMessage,
     getBoxModelCalled,
+    actualConsole,
+    elemHelper,
     highlightQuadCalled;
   function createElement(id, isVisible) {
     let elem = new Element(id, '');
@@ -22,6 +22,7 @@ describe('elementHelper', () => {
   }
 
   beforeEach(() => {
+    elemHelper = rewire('../../../lib/elements/elementHelper');
     boxModel = null;
     highlightQuadArgs = null;
     hideHighlightCalled = false;
@@ -36,7 +37,7 @@ describe('elementHelper', () => {
     });
 
     elemHelper.__set__('overlayHandler', {
-      highlightQuad: async args => {
+      highlightQuad: async (args) => {
         highlightQuadCalled = true;
         highlightQuadArgs = args;
       },
@@ -44,8 +45,15 @@ describe('elementHelper', () => {
         hideHighlightCalled = true;
       },
     });
-    elemHelper.__set__('console', { warn: warning => (warningMessage = warning) });
+    actualConsole = console;
+    elemHelper.__set__('console', { warn: (warning) => (warningMessage = warning) });
     setConfig({ highlightOnAction: 'true' });
+  });
+
+  afterEach(() => {
+    elemHelper = rewire('../../../lib/elements/elementHelper');
+    // eslint-disable-next-line no-global-assign
+    console = actualConsole;
   });
 
   it('should highlight visible element', async () => {

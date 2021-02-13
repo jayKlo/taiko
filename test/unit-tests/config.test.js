@@ -1,9 +1,15 @@
 const expect = require('chai').expect;
 const rewire = require('rewire');
-const config = rewire('../../lib/config');
-const originalConfig = Object.assign({}, config.defaultConfig);
 
 describe('Config tests', () => {
+  let config, originalConfig;
+  beforeEach(() => {
+    config = rewire('../../lib/config');
+    Object.assign({}, config.defaultConfig);
+  });
+  afterEach(() => {
+    config = rewire('../../lib/config');
+  });
   describe('Test setConfig', () => {
     describe('For invalid config name', () => {
       it('should throw exception', () => {
@@ -23,13 +29,17 @@ describe('Config tests', () => {
           const newConfig = {
             headful: false,
             highlightOnAction: 'true',
-            ignoreSSLErrors: false,
+            firefox: false,
+            ignoreSSLErrors: true,
             navigationTimeout: 2,
             observe: false,
             observeTime: 2,
             retryInterval: 2,
             retryTimeout: 2,
             waitForNavigation: false,
+            criConnectionRetries: 50,
+            noOfElementToMatch: 20,
+            local: false,
           };
           expect(config.defaultConfig).not.deep.equal(newConfig);
 
@@ -70,7 +80,7 @@ describe('Config tests', () => {
       it('should return the specified config', () => {
         let allowedConfig = Object.keys(config.defaultConfig);
 
-        allowedConfig.forEach(optionName => {
+        allowedConfig.forEach((optionName) => {
           let optionValue = config.getConfig(optionName);
           expect(config.defaultConfig[optionName]).to.equal(optionValue);
         });
@@ -148,7 +158,11 @@ describe('Config tests', () => {
   });
 
   describe('Test determineObserveDelay', () => {
-    const determineObserveDelay = config.__get__('determineObserveDelay');
+    let determineObserveDelay;
+
+    before(() => {
+      determineObserveDelay = config.__get__('determineObserveDelay');
+    });
 
     describe('with observe true', () => {
       it('should return provided value', () => {
@@ -219,12 +233,16 @@ describe('Config tests', () => {
         headful: true,
         highlightOnAction: 'true',
         ignoreSSLErrors: true,
+        firefox: false,
         navigationTimeout: 30000,
         observe: true,
         observeTime: 5000,
         retryInterval: 100,
         retryTimeout: 10000,
         waitForNavigation: true,
+        criConnectionRetries: 50,
+        noOfElementToMatch: 20,
+        local: false,
       };
       config.setBrowserOptions(options);
       expect(config.defaultConfig).to.deep.equal(expectedConfig);

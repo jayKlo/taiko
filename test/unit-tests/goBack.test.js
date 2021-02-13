@@ -1,29 +1,33 @@
 const { expect } = require('chai');
 const rewire = require('rewire');
-let taiko = rewire('../../lib/taiko');
+
 const test_name = 'goBack';
 
 describe(test_name, () => {
+  let taiko;
   let actualHistoryEntryId,
     actualOptions = null;
+
   before(async () => {
     const mockWrapper = async (options, cb) => {
       actualOptions = options;
       await cb();
     };
+    taiko = rewire('../../lib/taiko');
     taiko.__set__('doActionAwaitingNavigation', mockWrapper);
     taiko.__set__('validate', () => {});
   });
 
   after(async () => {
     actualOptions = null;
+    taiko = rewire('../../lib/taiko');
   });
 
   describe('to about blank page', () => {
     before(async () => {
-      taiko.__set__('page', {
-        navigateToHistoryEntry: historyEntryId => {
-          actualHistoryEntryId = historyEntryId;
+      taiko.__set__('pageHandler', {
+        navigateToHistoryEntry: (historyEntryId) => {
+          actualHistoryEntryId = { entryId: historyEntryId };
         },
         getNavigationHistory: () => {
           return {

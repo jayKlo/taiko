@@ -11,6 +11,7 @@ let {
   button,
   attach,
   setConfig,
+  $,
 } = require('../../lib/taiko');
 let { createHtml, removeFile, openBrowserArgs, resetConfig } = require('./test-util');
 const path = require('path');
@@ -49,7 +50,7 @@ describe(test_name, () => {
     await goto(filePath);
     setConfig({
       waitForNavigation: false,
-      retryTimeout: 100,
+      retryTimeout: 10,
       retryInterval: 10,
     });
   });
@@ -75,13 +76,13 @@ describe(test_name, () => {
 
       it('test description', async () => {
         expect(fileField(above(button('Upload'))).description).to.be.eql(
-          'File field Above Button with label Upload ',
+          'FileField above Button with label Upload ',
         );
       });
 
       xit('test text()', async () => {
         expect(await fileField(above(button('Upload'))).text()).to.be.eql(
-          'File field Above Button with label Upload ',
+          'File field above Button with label Upload ',
         );
       });
 
@@ -101,7 +102,7 @@ describe(test_name, () => {
 
       it('test description', async () => {
         expect(fileField('Select a file').description).to.be.eql(
-          'File field with label Select a file ',
+          'FileField with label Select a file ',
         );
       });
 
@@ -123,7 +124,7 @@ describe(test_name, () => {
 
       it('test description', async () => {
         expect(fileField('Choose a file').description).to.be.eql(
-          'File field with label Choose a file ',
+          'FileField with label Choose a file ',
         );
       });
 
@@ -135,16 +136,16 @@ describe(test_name, () => {
     });
   });
   describe('hidden', () => {
-    it('exists when selectHiddenElement is provided', async () => {
-      expect(await fileField({ id: 'hidden-file-upload' }, { selectHiddenElement: true }).exists())
-        .to.be.true;
+    it('hidden element exists', async () => {
+      expect(await fileField({ id: 'hidden-file-upload' }).exists()).to.be.true;
     });
-
-    it('does not exists when selectHiddenElement is not provided', async () => {
-      const exists = await fileField({
-        id: 'hidden-file-upload',
-      }).exists();
-      expect(exists).to.be.false;
+    it('attach to hidden element', async () => {
+      await attach(
+        path.join(__dirname, 'data', 'foo.txt'),
+        fileField({ id: 'hidden-file-upload' }),
+        { force: true },
+      );
+      expect(await fileField({ id: 'hidden-file-upload' }).value()).to.include('foo.txt');
     });
   });
 
@@ -153,18 +154,14 @@ describe(test_name, () => {
       const elements = await fileField({
         id: 'similarFileField',
       }).elements();
-      expect(elements[0].get())
-        .to.be.a('number')
-        .above(0);
+      expect(elements[0].get()).to.be.a('string');
     });
 
     it('test description of elements', async () => {
       let elements = await fileField({
         id: 'similarFileField',
       }).elements();
-      expect(elements[0].description).to.be.eql(
-        'File field[@id = concat(\'similarFileField\', "")]',
-      );
+      expect(elements[0].description).to.be.eql('FileField[id="similarFileField"]');
     });
 
     it('test value of elements', async () => {
@@ -188,6 +185,14 @@ describe(test_name, () => {
       await expect(
         attach(path.join(__dirname, 'data', 'foowrong.txt'), fileField('Select a file')),
       ).to.be.rejectedWith(`File ${path.join(__dirname, 'data', 'foowrong.txt')} does not exist.`);
+    });
+  });
+
+  describe('Parameters validation', () => {
+    it('should throw a TypeError when an ElementWrapper is passed as argument', async () => {
+      expect(() => fileField($('div'))).to.throw(
+        'You are passing a `ElementWrapper` to a `fileField` selector. Refer https://docs.taiko.dev/api/filefield/ for the correct parameters',
+      );
     });
   });
 });

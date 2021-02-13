@@ -1,13 +1,16 @@
 const rewire = require('rewire');
 const EventEmitter = require('events').EventEmitter;
 const expect = require('chai').expect;
-let pageHandler = rewire('../../../lib/handlers/pageHandler');
 
 describe('pageHandler', () => {
   let navigate = {};
+  let pageHandler;
   let event = new EventEmitter();
 
-  beforeEach(() => {
+  before(() => {
+    pageHandler = rewire('../../../lib/handlers/pageHandler');
+    const createdSessionListener = pageHandler.__get__('createdSessionListener');
+    pageHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
     let page = {
       bringToFront: async () => {},
       domContentEventFired: async () => {},
@@ -20,7 +23,7 @@ describe('pageHandler', () => {
       setLifecycleEventsEnabled: async () => {},
       lifecycleEvent: async () => {},
       javascriptDialogOpening: async () => {},
-      navigate: async param => {
+      navigate: async (param) => {
         navigate.called = true;
         navigate.with = param;
         if (param.url.includes('fail')) {
@@ -31,6 +34,15 @@ describe('pageHandler', () => {
     };
     pageHandler.__set__('page', page);
     pageHandler.__set__('eventHandler', event);
+  });
+
+  after(() => {
+    let createdSessionListener = pageHandler.__get__('createdSessionListener');
+    pageHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
+    pageHandler = rewire('../../../lib/handlers/pageHandler');
+    createdSessionListener = pageHandler.__get__('createdSessionListener');
+    pageHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
+    event.removeAllListeners();
   });
 
   it('.handleNavigation should call page.navigate', () => {
@@ -44,12 +56,47 @@ describe('pageHandler', () => {
     expect(event.eventNames()).to.be.eql(['requestStarted', 'responseReceived']);
   });
 
+  it('.handleNavigation should return response with redirection details', async () => {
+    pageHandler.__set__('isSameUrl', () => {
+      return true;
+    });
+    const actualResponse = pageHandler.handleNavigation('http://gauge.org');
+    event.emit('requestStarted', { request: { url: 'gauge.org' }, requestId: 123 });
+    event.emit('requestStarted', {
+      requestId: 123,
+      request: {
+        url: 'gauge.org',
+      },
+      redirectResponse: { url: 'http://gauge.org', status: 301, statusText: 'Moved Permanently' },
+    });
+    event.emit('responseReceived', {
+      requestId: 123,
+      response: { url: 'http://gauge.org', status: 301, statusText: 'Moved Permanently' },
+    });
+    expect(await actualResponse).to.deep.equal({
+      redirectedResponse: [
+        {
+          status: {
+            code: 301,
+            text: 'Moved Permanently',
+          },
+          url: 'http://gauge.org',
+        },
+      ],
+      url: 'http://gauge.org',
+      status: {
+        code: 301,
+        text: 'Moved Permanently',
+      },
+    });
+  });
+
   it('.handleNavigation should fail if navigation fails', async () => {
     try {
       await pageHandler.handleNavigation('http://gauge.fail');
     } catch (error) {
       expect(error.message).to.be.eql(
-        'Navigation to url http://gauge.fail failed.\n REASON: failed to navigate',
+        'Navigation to url http://gauge.fail failed. REASON: failed to navigate',
       );
     }
   });

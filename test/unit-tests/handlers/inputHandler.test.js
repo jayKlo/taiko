@@ -1,23 +1,34 @@
 const rewire = require('rewire');
 const expect = require('chai').expect;
-const inputHandler = rewire('../../../lib/handlers/inputHandler');
 
 describe('inputHandler', () => {
-  let calledWith = [];
+  let calledWith = [],
+    inputHandler;
 
-  beforeEach(() => {
-    calledWith = [];
+  before(() => {
+    inputHandler = rewire('../../../lib/handlers/inputHandler');
     inputHandler.__set__('input', {
-      dispatchKeyEvent: async param => {
+      dispatchKeyEvent: async (param) => {
         calledWith.push(param);
       },
-      dispatchMouseEvent: async param => {
+      dispatchMouseEvent: async (param) => {
         calledWith.push(param);
       },
-      dispatchTouchEvent: async param => {
+      dispatchTouchEvent: async (param) => {
         calledWith.push(param);
       },
     });
+  });
+
+  beforeEach(() => {
+    calledWith = [];
+  });
+
+  after(() => {
+    const createdSessionListener = inputHandler.__get__('createdSessionListener');
+    inputHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
+    inputHandler = rewire('../../../lib/handlers/inputHandler');
+    inputHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
   });
 
   it('.up should dispach keyUp event', async () => {

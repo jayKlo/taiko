@@ -7,9 +7,10 @@ let {
   radioButton,
   closeBrowser,
   goto,
-  button,
   click,
   setConfig,
+  evaluate,
+  $,
 } = require('../../lib/taiko');
 let { createHtml, removeFile, openBrowserArgs, resetConfig } = require('./test-util');
 
@@ -19,15 +20,50 @@ describe(test_name, () => {
   let filePath;
   before(async () => {
     let innerHtml =
+      `<script>
+     
+        class ShadowButton extends HTMLElement {
+          constructor() {
+            super();
+            var shadow = this.attachShadow({mode: 'open'});
+    
+            var button = document.createElement('input');
+            button.setAttribute('type', 'radio');
+            button.setAttribute('id', 'Shadow Click');
+            button.addEventListener("click", event => {
+              alert("Hello from the shadows");
+            });
+            shadow.appendChild(button);
+
+            var hiddenButton = document.createElement('input');
+            hiddenButton.setAttribute('type', 'radio');
+            hiddenButton.setAttribute('id', 'HiddenShadowButton');
+            hiddenButton.setAttribute('style','display:none');
+            shadow.appendChild(hiddenButton);
+            
+          }
+        }
+        customElements.define('shadow-button', ShadowButton);
+      </script>` +
+      ' <shadow-button></shadow-button>' +
       '<form>' +
       '<input type="radio" id="radioButtonWithInlineLabel" name="testRadioButton" value="radioButtonWithInlineLabel">radioButtonWithInlineLabel</input>' +
+      '<input type="Radio" name="testRadioButton" value="radioButtonWithInlineLabelAndUpperCaseTypeAttribute">radioButtonWithInlineLabelAndUpperCaseTypeAttribute</input>' +
       '<label>' +
       '<input name="testRadioButton" type="radio" value="radioButtonWithWrappedLabel"/>' +
       '<span>radioButtonWithWrappedLabel</span>' +
       '</label>' +
+      '<label>' +
+      '<input name="testRadioButton" type="RADIO" value="radioButtonWithWrappedLabelAndUpperCaseTypeAttribute"/>' +
+      '<span>radioButtonWithWrappedLabelAndUpperCaseTypeAttribute</span>' +
+      '</label>' +
       '<p>' +
       '<input id="radioButtonWithLabelFor" name="testRadioButton" type="radio" value="radioButtonWithLabelFor"/>' +
       '<label for="radioButtonWithLabelFor">radioButtonWithLabelFor</label>' +
+      '</p>' +
+      '<p>' +
+      '<input id="radioButtonWithLabelForAndUpperCaseTypeAttribute" name="testRadioButton" type="radio" value="radioButtonWithLabelFor"/>' +
+      '<label for="radioButtonWithLabelForAndUpperCaseTypeAttribute">radioButtonWithLabelForAndUpperCaseTypeAttribute</label>' +
       '</p>' +
       '<input name="hiddenRadioButton" type="radio" id="hiddenRadioButton" value="hiddenRadioButton">hiddenRadioButton</input>' +
       '<input type="reset" value="Reset">' +
@@ -46,7 +82,7 @@ describe(test_name, () => {
     await goto(filePath);
     setConfig({
       waitForNavigation: false,
-      retryTimeout: 100,
+      retryTimeout: 10,
       retryInterval: 10,
     });
   });
@@ -55,6 +91,37 @@ describe(test_name, () => {
     resetConfig();
     await closeBrowser();
     removeFile(filePath);
+  });
+
+  describe('case insensitive selector', async () => {
+    afterEach(async () => {
+      await click('Reset');
+    });
+
+    it('test exists() with inline text', async () => {
+      expect(await radioButton('radioButtonWithInlineLabelAndUpperCaseTypeAttribute').exists()).to
+        .be.true;
+    });
+
+    it('test exists() wrapped in label', async () => {
+      expect(await radioButton('radioButtonWithWrappedLabelAndUpperCaseTypeAttribute').exists()).to
+        .be.true;
+    });
+
+    it('test exists() using label for', async () => {
+      expect(await radioButton('radioButtonWithLabelForAndUpperCaseTypeAttribute').exists()).to.be
+        .true;
+    });
+  });
+
+  describe('shadow dom', () => {
+    it('inside shadow dom', async () => {
+      expect(await radioButton({ id: 'Shadow Click' }).exists()).to.be.true;
+    });
+
+    it('should return false for hidden element when isVisible fn is called on shadow radio button', async () => {
+      expect(await radioButton({ id: 'HiddenShadowButton' }).isVisible()).to.be.false;
+    });
   });
 
   describe('with inline text', () => {
@@ -78,8 +145,16 @@ describe(test_name, () => {
     });
 
     it('test select() triggers events', async () => {
-      await radioButton('radioButtonWithInlineLabel').select();
-      expect(await button('show on check').exists()).to.be.true;
+      await evaluate(() => {
+        document.raisedEvents = [];
+        var dropDown = document.getElementById('radioButtonWithLabelFor');
+        ['input', 'change', 'click'].forEach((ev) => {
+          dropDown.addEventListener(ev, () => document.raisedEvents.push(ev));
+        });
+      });
+      await radioButton('radioButtonWithLabelFor').select();
+      var events = await evaluate(() => document.raisedEvents);
+      expect(events).to.eql(['change', 'input', 'click']);
     });
 
     it('test deselect()', async () => {
@@ -114,17 +189,13 @@ describe(test_name, () => {
 
     it('test description', async () => {
       const description = radioButton('radioButtonWithWrappedLabel').description;
-      expect(description).to.be.eql('Radio button with label radioButtonWithWrappedLabel ');
+      expect(description).to.be.eql('RadioButton with label radioButtonWithWrappedLabel ');
     });
   });
 
   describe('with hidden style', () => {
     it('should find hidden radio buttons', async () => {
-      expect(
-        await radioButton('hiddenRadioButton', {
-          selectHiddenElement: true,
-        }).exists(),
-      ).to.be.true;
+      expect(await radioButton('hiddenRadioButton').exists()).to.be.true;
     });
 
     it('should return true for non hidden element when isVisible fn is called on button', async () => {
@@ -132,9 +203,7 @@ describe(test_name, () => {
     });
 
     it('should return false for hidden element when isVisible fn is called on textBox', async () => {
-      expect(
-        await radioButton({ id: 'hiddenRadioButton' }, { selectHiddenElement: true }).isVisible(),
-      ).to.be.false;
+      expect(await radioButton({ id: 'hiddenRadioButton' }).isVisible()).to.be.false;
     });
   });
 
@@ -145,7 +214,7 @@ describe(test_name, () => {
 
     it('test description', async () => {
       const description = radioButton('radioButtonWithLabelFor').description;
-      expect(description).to.be.eql('Radio button with label radioButtonWithLabelFor ');
+      expect(description).to.be.eql('RadioButton with label radioButtonWithLabelFor ');
     });
   });
 
@@ -154,18 +223,14 @@ describe(test_name, () => {
       const elements = await radioButton({
         id: 'someRadioButton',
       }).elements();
-      expect(elements[0].get())
-        .to.be.a('number')
-        .above(0);
+      expect(elements[0].get()).to.be.a('string');
     });
 
     it('test description of elements', async () => {
       let elements = await radioButton({
         id: 'someRadioButton',
       }).elements();
-      expect(elements[0].description).to.be.eql(
-        'Radio button[@id = concat(\'someRadioButton\', "")]',
-      );
+      expect(elements[0].description).to.be.eql('RadioButton[id="someRadioButton"]');
     });
 
     it('test isSelected of elements', async () => {
@@ -189,6 +254,14 @@ describe(test_name, () => {
       }).elements();
       await elements[0].deselect();
       expect(await elements[0].isSelected()).to.be.false;
+    });
+  });
+
+  describe('Parameters validation', () => {
+    it('should throw a TypeError when an ElementWrapper is passed as argument', async () => {
+      expect(() => radioButton($('div'))).to.throw(
+        'You are passing a `ElementWrapper` to a `radioButton` selector. Refer https://docs.taiko.dev/api/radiobutton/ for the correct parameters',
+      );
     });
   });
 });

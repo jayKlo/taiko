@@ -6,8 +6,8 @@ const { goto, client, click } = require('taiko'),
 
 (async () => {
   var downloadPath = path.resolve(__dirname, 'data', 'downloaded');
-  var sleep = ms => {
-    return new Promise(resolve => {
+  var sleep = (ms) => {
+    return new Promise((resolve) => {
       setTimeout(resolve, ms);
     });
   };
@@ -30,6 +30,8 @@ const { goto, client, click } = require('taiko'),
     process.exitCode = 1;
   } finally {
     await closeBrowserAndStopScreencast();
-    fs.unlinkSync(path.join(downloadPath, 'foo.txt'));
+    if (fs.existsSync(path.join(downloadPath, 'foo.txt'))) {
+      fs.unlinkSync(path.join(downloadPath, 'foo.txt'));
+    }
   }
 })();

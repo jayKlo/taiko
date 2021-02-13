@@ -1,37 +1,45 @@
 const expect = require('chai').expect;
 const rewire = require('rewire');
-let networkHandler = rewire('../../lib/handlers/networkHandler');
+let fetchHandler = rewire('../../lib/handlers/fetchHandler');
 const test_name = 'Intercept';
 
 describe(test_name, () => {
   let actualOption;
-  before(() => {
-    networkHandler.__set__('network', {
-      continueInterceptedRequest: options => {
+  beforeEach(() => {
+    fetchHandler.__set__('fetch', {
+      enable: () => {},
+      requestPaused: () => {},
+      continueRequest: (options) => {
         actualOption = options;
         return Promise.resolve();
       },
-      requestWillBeSent: () => {},
-      loadingFinished: () => {},
-      loadingFailed: () => {},
-      responseReceived: () => {},
-      setCacheDisabled: () => {},
-      setRequestInterception: () => {},
-      requestIntercepted: () => {},
+      failRequest: (options) => {
+        actualOption = options;
+        return Promise.resolve();
+      },
+      fulfillRequest: (options) => {
+        actualOption = options;
+        return Promise.resolve();
+      },
     });
   });
 
   afterEach(() => {
-    networkHandler.resetInterceptors();
+    actualOption = null;
+    fetchHandler.resetInterceptors();
+    const createdSessionListener = fetchHandler.__get__('createdSessionListener');
+    fetchHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
+    fetchHandler = rewire('../../lib/handlers/fetchHandler');
+    fetchHandler.__get__('eventHandler').removeListener('createdSession', createdSessionListener);
   });
 
   it('Check redirection using interception', async () => {
-    networkHandler.addInterceptor({
+    fetchHandler.addInterceptor({
       requestUrl: 'www.google.com',
       action: 'www.ibibo.com',
     });
-    networkHandler.handleInterceptor({
-      interceptionId: 'interceptionId',
+    fetchHandler.handleInterceptor({
+      requestId: 'requestId',
       request: {
         url: 'http://www.google.com',
         method: 'GET',
@@ -43,9 +51,9 @@ describe(test_name, () => {
   });
 
   it('Block url', async () => {
-    networkHandler.addInterceptor({ requestUrl: 'www.google.com' });
-    networkHandler.handleInterceptor({
-      interceptionId: 'interceptionId',
+    fetchHandler.addInterceptor({ requestUrl: 'www.google.com' });
+    fetchHandler.handleInterceptor({
+      requestId: 'requestId',
       request: {
         url: 'http://www.google.com',
         method: 'GET',
@@ -57,7 +65,7 @@ describe(test_name, () => {
   });
 
   it('Mock Response', async () => {
-    networkHandler.addInterceptor({
+    fetchHandler.addInterceptor({
       requestUrl: 'http://localhost:3000/api/customers/11',
       action: {
         body: {
@@ -73,8 +81,8 @@ describe(test_name, () => {
         },
       },
     });
-    networkHandler.handleInterceptor({
-      interceptionId: 'interceptionId',
+    fetchHandler.handleInterceptor({
+      requestId: 'requestId',
       request: {
         url: 'http://localhost:3000/api/customers/11',
         method: 'GET',
@@ -82,25 +90,45 @@ describe(test_name, () => {
       resourceType: 'Document',
       isNavigationRequest: true,
     });
-    let res = Buffer.from(actualOption.rawResponse, 'base64').toString('binary');
+    let res = Buffer.from(actualOption.body, 'base64').toString('binary');
     expect(res).to.include('12345 Central St.');
+  });
+
+  it('Mock Response with empty body', async () => {
+    fetchHandler.addInterceptor({
+      requestUrl: 'http://localhost:3000/api/customers/11',
+      action: {},
+    });
+    let req = {
+      requestId: 'requestId',
+      request: {
+        url: 'http://localhost:3000/api/customers/11',
+        method: 'GET',
+      },
+      resourceType: 'Document',
+      isNavigationRequest: true,
+    };
+
+    expect(() => {
+      fetchHandler.handleInterceptor(req);
+    }).to.not.throw();
   });
 
   it('More than one intercept added for the same requestUrl', async () => {
     let actualConsoleWarn;
-    console.warn = log => {
+    console.warn = (log) => {
       actualConsoleWarn = log;
     };
-    networkHandler.addInterceptor({
+    fetchHandler.addInterceptor({
       requestUrl: 'www.google.com',
       action: 'www.ibibo.com',
     });
-    networkHandler.addInterceptor({
+    fetchHandler.addInterceptor({
       requestUrl: 'www.google.com',
       action: 'www.gauge.org',
     });
-    networkHandler.handleInterceptor({
-      interceptionId: 'interceptionId',
+    fetchHandler.handleInterceptor({
+      requestId: 'requestId',
       request: {
         url: 'http://www.google.com',
         method: 'GET',
@@ -114,36 +142,66 @@ describe(test_name, () => {
     expect(actualOption.url).to.equal('http://www.gauge.org');
   });
 
-  it('intercept with count added for the requestUrl', async () => {
+  describe('Intercept with count added', async () => {
     let count = 3;
-    networkHandler.addInterceptor({
-      requestUrl: 'www.google.com',
-      action: 'www.gauge.org',
-      count,
+    beforeEach(() => {
+      fetchHandler.addInterceptor({
+        requestUrl: 'www.google.com',
+        action: 'www.gauge.org',
+        count,
+      });
     });
 
-    for (var i = 0; i < count + 1; i++) {
-      networkHandler.handleInterceptor({
-        interceptionId: 'interceptionId',
-        request: {
-          url: 'http://www.google.com',
-          method: 'GET',
-        },
-        resourceType: 'Document',
-        isNavigationRequest: true,
-      });
-      var result = count === i ? undefined : 'http://www.gauge.org';
-      expect(actualOption.url).to.equal(result);
-    }
+    it('intercepts requestUrl', async () => {
+      for (var i = 0; i < count + 1; i++) {
+        fetchHandler.handleInterceptor({
+          requestId: 'requestId',
+          request: {
+            url: 'http://www.google.com',
+            method: 'GET',
+          },
+          resourceType: 'Document',
+          isNavigationRequest: true,
+        });
+        var result = count === i ? undefined : 'http://www.gauge.org';
+        expect(actualOption.url).to.equal(result);
+      }
+    });
+
+    it('maintains count amidst interleaving matched requests', async () => {
+      for (var i = 0; i < count + 1; i++) {
+        fetchHandler.handleInterceptor({
+          requestId: 'otherRequestId',
+          request: {
+            url: 'http://www.otherrequest.com',
+            method: 'GET',
+          },
+          resourceType: 'Document',
+          isNavigationRequest: true,
+        });
+        fetchHandler.handleInterceptor({
+          requestId: 'requestId',
+          request: {
+            url: 'http://www.google.com',
+            method: 'GET',
+          },
+          resourceType: 'Document',
+          isNavigationRequest: true,
+        });
+        var result = count === i ? undefined : 'http://www.gauge.org';
+        expect(actualOption.url).to.equal(result);
+      }
+    });
   });
+
   it('reset intercept for the requestUrl if interceptor is present for the url', async () => {
-    networkHandler.addInterceptor({
+    fetchHandler.addInterceptor({
       requestUrl: 'www.google.com',
       action: 'www.gauge.org',
     });
-    var result = networkHandler.resetInterceptor('www.google.com');
-    networkHandler.handleInterceptor({
-      interceptionId: 'interceptionId',
+    var result = fetchHandler.resetInterceptor('www.google.com');
+    fetchHandler.handleInterceptor({
+      requestId: 'requestId',
       request: {
         url: 'http://www.google.com',
         method: 'GET',
@@ -155,7 +213,58 @@ describe(test_name, () => {
     expect(result).to.equal(true);
   });
   it('reset intercept returns false if intercept does not exist for the requestUrl', async () => {
-    var result = networkHandler.resetInterceptor('www.google.com');
+    var result = fetchHandler.resetInterceptor('www.google.com');
     expect(result).to.equal(false);
+  });
+  it('reset interceptors should set interceptors empty array and userEnabledIntercept false', async () => {
+    fetchHandler.__set__('interceptors', ['intercept1', 'intercept2']);
+    fetchHandler.__set__('userEnabledIntercept', true);
+    fetchHandler.resetInterceptors();
+    expect(fetchHandler.__get__('interceptors')).to.be.empty;
+    expect(fetchHandler.__get__('userEnabledIntercept')).to.be.false;
+  });
+  it('add interceptor should put a entry in interceptors', async () => {
+    const intercept = { request: 'action' };
+    fetchHandler.addInterceptor(intercept);
+    expect(fetchHandler.__get__('interceptors')[0]).to.deep.equal(intercept);
+  });
+  it('add interceptor should call enableFetchIntercept for the first time and set userEnabledIntercept to true', async () => {
+    let called = false;
+    fetchHandler.__set__('enableFetchIntercept', () => {
+      called = true;
+    });
+    fetchHandler.addInterceptor('intercept');
+    expect(fetchHandler.__get__('userEnabledIntercept')).to.be.true;
+    expect(called).to.be.true;
+  });
+  it('add interceptor should not call enableFetchIntercept if userEnabledIntercept is set to true', async () => {
+    let called = false;
+    fetchHandler.__set__('enableFetchIntercept', () => {
+      called = true;
+    });
+    fetchHandler.__set__('userEnabledIntercept', true);
+    fetchHandler.addInterceptor('intercept');
+    expect(fetchHandler.__get__('userEnabledIntercept')).to.be.true;
+    expect(called).to.be.false;
+  });
+  it('createdSessionListener should call enableFetchIntercept if userEnabledIntercept is set to true', async () => {
+    let called = false;
+    fetchHandler.__set__('enableFetchIntercept', () => {
+      called = true;
+    });
+    fetchHandler.__set__('userEnabledIntercept', true);
+    fetchHandler.__get__('createdSessionListener')({ Fetch: 'domain' });
+    expect(fetchHandler.__get__('userEnabledIntercept')).to.be.true;
+    expect(called).to.be.true;
+  });
+  it('createdSessionListener should not call enableFetchIntercept if userEnabledIntercept is set to false', async () => {
+    let called = false;
+    fetchHandler.__set__('enableFetchIntercept', () => {
+      called = true;
+    });
+    fetchHandler.__set__('userEnabledIntercept', false);
+    fetchHandler.__get__('createdSessionListener')({ Fetch: 'domain' });
+    expect(fetchHandler.__get__('userEnabledIntercept')).to.be.false;
+    expect(called).to.be.false;
   });
 });

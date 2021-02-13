@@ -1,5 +1,5 @@
 let path = require('path');
-let { writeFileSync, unlinkSync } = require('fs');
+let { writeFileSync, unlinkSync, existsSync } = require('fs');
 let { pathToFileURL, fileURLToPath } = require('url');
 let { setConfig } = require('../../lib/taiko');
 
@@ -20,12 +20,14 @@ module.exports.createHtml = (innerHtml, testName) => {
   return pathToFileURL(htmlFilePath).toString();
 };
 
-module.exports.removeFile = filePath => {
+module.exports.removeFile = (filePath) => {
   try {
     filePath = fileURLToPath(filePath);
   } catch (e) {
   } finally {
-    unlinkSync(filePath);
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
   }
 };
 
@@ -48,7 +50,7 @@ module.exports.resetConfig = () => {
     retryTimeout: 10000,
     observe: false,
     waitForNavigation: true,
-    ignoreSSLErrors: false,
+    ignoreSSLErrors: true,
     headful: false,
     highlightOnAction: 'true',
   });

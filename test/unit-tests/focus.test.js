@@ -19,7 +19,7 @@ describe(test_name, () => {
     await goto(filePath);
     setConfig({
       waitForNavigation: false,
-      retryTimeout: 100,
+      retryTimeout: 10,
       retryInterval: 10,
     });
   });
@@ -37,7 +37,7 @@ describe(test_name, () => {
 
     it('should throw error if the given element is not focusable', async () => {
       await expect(focus(textBox('unfocusable'))).to.be.eventually.rejectedWith(
-        'Error: Element is not focusable\n',
+        'TextBox with label unfocusable is disabled',
       );
     });
 
